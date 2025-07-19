@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Iron Man Car Builder</title>
+    <meta name="theme-color" content="#121212">
+    <link rel="manifest" href="/manifest.webmanifest">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js');
+            });
+        }
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@300;400;700&display=swap');
+        
+        :root {
+            --iron-red: #ff1a1a;
+            --iron-gold: #ffd700;
+            --jarvis-blue: #00b4d8;
+        }
+        
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Roboto Mono', monospace;
+            background: #121212;
+            color: white;
+        }
+        
+        #car-container {
+            width: 100%;
+            height: 70vh;
+            position: relative;
+        }
+        
+        #chat-container {
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            width: calc(100% - 20px);
+            max-width: 350px;
+            background: rgba(0, 0, 0, 0.7);
+            border: 1px solid var(--jarvis-blue);
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 0 20px var(--jarvis-blue);
+        }
+        
+        .chat-header {
+            background: linear-gradient(90deg, #212121, #424242);
+            color: var(--iron-gold);
+            padding: 10px;
+            font-weight: bold;
+            text-align: center;
+            border-bottom: 2px solid var(--jarvis-blue);
+        }
+        
+        .chat-messages {
+            height: 300px;
+            overflow-y: auto;
+            padding: 10px;
+        }
+        
+        .chat-message {
+            margin-bottom: 15px;
+            padding: 8px 12px;
+            border-radius: 8px;
+            max-width: 80%;
+            word-wrap: break-word;
+        }
+        
+        .user-message {
+            background: rgba(255, 26, 26, 0.2);
+            border-left: 3px solid var(--iron-red);
+            margin-left: auto;
+        }
+        
+        .jarvis-message {
+            background: rgba(0, 180, 216, 0.2);
+            border-left: 3px solid var(--jarvis-blue);
+            margin-right: auto;
+        }
+        
+        .chat-input {
+            display: flex;
+            padding: 10px;
+            background: rgba(33, 33, 33, 0.9);
+        }
+        
+        #user-input {
+            flex: 1;
+            padding: 8px;
+            background: transparent;
+            border: 1px solid #555;
+            border-radius: 5px;
+            color: white;
+            outline: none;
+        }
+        
+        #send-btn {
+            background: var(--iron-red);
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            margin-left: 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        #send-btn:hover {
+            background: #e60000;
+        }
+        
+        .control-panel {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            border-radius: 10px;
+            border: 1px solid #333;
+            max-width: 300px;
+            z-index: 100;
+        }
+
+        @media (max-width: 640px) {
+            .control-panel {
+                max-width: none;
+                right: 10px;
+            }
+            
+            .part-selection {
+                justify-content: center;
+            }
+        }
+        
+        .control-title {
+            color: var(--iron-gold);
+            margin-bottom: 10px;
+            font-size: 18px;
+            text-align: center;
+        }
+        
+        .control-group {
+            margin-bottom: 15px;
+        }
+        
+        .control-label {
+            display: block;
+            margin-bottom: 5px;
+            color: #ccc;
+        }
+        
+        .control-slider {
+            width: 100%;
+            margin-bottom: 10px;
+        }
+        
+        .part-selection {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        
+        .part-btn {
+            padding: 5px 10px;
+            background: #333;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .part-btn:hover {
+            background: #555;
+        }
+        
+        .part-btn.active {
+            background: var(--iron-red);
+            color: white;
+        }
+        
+        .holographic {
+            position: absolute;
+            background: rgba(0, 180, 216, 0.1);
+            border: 1px solid rgba(0, 180, 216, 0.3);
+            border-radius: 50%;
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+            animation: holographic-pulse 4s infinite;
+        }
+        
+        @keyframes holographic-pulse {
+            0% { box-shadow: 0 0 5px rgba(0, 180, 216, 0.5); }
+            50% { box-shadow: 0 0 20px rgba(0, 180, 216, 0.8); }
+            100% { box-shadow: 0 0 5px rgba(0, 180, 216, 0.5); }
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: var(--jarvis-blue);
+            animation: spin 1s ease-in-out infinite;
+            margin-right: 10px;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        .jarvis-badge {
+            font-size: 10px;
+            background: var(--jarvis-blue);
+            color: black;
+            padding: 2px 5px;
+            border-radius: 3px;
+            margin-left: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div id="car-container"></div>
+    
+    <div id="install-btn" class="fixed top-4 right-4 bg-blue-600 text-white px-4 py-2 rounded-md cursor-pointer hidden">
+        Install App
+    </div>
+    
+    <div class="control-panel">
+        <div class="control-title">Mark VII Design Interface</div>
+        
+        <div class="control-group">
+            <label class="control-label">Car Body Color</label>
+            <input type="color" id="body-color" value="#ff1a1a" class="w-full">
+        </div>
+        
+        <div class="control-group">
+            <label class="control-label">Wheel Style</label>
+            <div class="part-selection">
+                <button class="part-btn active" data-part="wheel1">Classic</button>
+                <button class="part-btn" data-part="wheel2">Sport</button>
+                <button class="part-btn" data-part="wheel3">Offroad</button>
+            </div>
+        </div>
+        
+        <div class="control-group">
+            <label class="control-label">Spoiler</label>
+            <div class="part-selection">
+                <button class="part-btn" data-part="none">None</button>
+                <button class="part-btn" data-part="spoiler1">Small</button>
+                <button class="part-btn active" data-part="spoiler2">Race</button>
+                <button class="part-btn" data-part="spoiler3">Extreme</button>
+            </div>
+        </div>
+        
+        <div class="control-group">
+            <label class="control-label">Engine Sound</label>
+            <select id="engine-sound" class="w-full bg-gray-800 text-white p-2 rounded">
+                <option value="v8">V8 Roar</option>
+                <option value="electric">Electric Whine</option>
+                <option value="jet">Jet Turbine</option>
+            </select>
+        </div>
+    </div>
+    
+    <div id="chat-container">
+        <div class="chat-header">
+            J.A.R.V.I.S. <span class="jarvis-badge">AI</span>
+            <div id="status-indicator" style="font-size: 10px; color: #00ff00;">● Online</div>
+        </div>
+        <div class="chat-messages" id="chat-messages">
+            <div class="chat-message jarvis-message" style="animation: fadeIn 0.5s;">
+                Welcome to Stark Industries Vehicle Design Lab. I'm J.A.R.V.I.S., your AI assistant. How may I help you design today?
+            </div>
+        </div>
+        <div class="chat-input">
+            <input type="text" id="user-input" placeholder="Ask J.A.R.V.I.S. anything...">
+            <button id="send-btn">Send</button>
+        </div>
+    </div>
+    
+    <script>
+        // Initialize Three.js scene
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / (window.innerHeight * 0.7), 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ 
+            antialias: true, 
+            alpha: true,
+            powerPreference: "high-performance"
+        });
+        renderer.setSize(window.innerWidth, window.innerHeight * 0.7);
+        renderer.setClearColor(0x000000, 0);
+        renderer.physicallyCorrectLights = true;
+        renderer.outputEncoding = THREE.sRGBEncoding;
+        document.getElementById('car-container').appendChild(renderer.domElement);
+        
+        // Enhanced lighting
+        const ambientLight = new THREE.AmbientLight(0x404040, 0.8);
+        scene.add(ambientLight);
+        
+        const dirLight = new THREE.DirectionalLight(0xffffff, 2);
+        dirLight.position.set(0, 10, 5);
+        dirLight.castShadow = true;
+        dirLight.shadow.mapSize.width = 2048;
+        dirLight.shadow.mapSize.height = 2048;
+        scene.add(dirLight);
+        
+        const hemiLight = new THREE.HemisphereLight(0xffffbb, 0x080820, 1);
+        scene.add(hemiLight);
+        
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        
+        // Basic car model
+        const car = new THREE.Group();
+        scene.add(car);
+        
+        // Add reflective floor
+        const floorGeo = new THREE.PlaneGeometry(50, 50);
+        const floorMat = new THREE.MeshStandardMaterial({
+            color: 0x333333,
+            metalness: 0.2,
+            roughness: 0.4
+        });
+        const floor = new THREE.Mesh(floorGeo, floorMat);
+        floor.rotation.x = -Math.PI / 2;
+        floor.receiveShadow = true;
+        scene.add(floor);
+        
+        // Car body
+        const bodyGeometry = new THREE.BoxGeometry(3, 1.5, 6, 2, 2, 10);
+        const bodyMaterial = new THREE.MeshStandardMaterial({ 
+            color: 0xff1a1a,
+            metalness: 0.7,
+            roughness: 0.3,
+            clearcoat: 1,
+            clearcoatRoughness: 0.1,
+            envMapIntensity: 0.5
+        });
+        const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+        car.add(body);
+        
+        // Car cabin
+        const cabinGeometry = new THREE.BoxGeometry(2.5, 0.8, 2);
+        const cabinMaterial = new THREE.MeshPhongMaterial({ 
+            color: 0x111111,
+            transparent: true,
+            opacity: 0.7
+        });
+        const cabin = new THREE.Mesh(cabinGeometry, cabinMaterial);
+        cabin.position.y = 0.8;
+        cabin.position.z = -1;
+        car.add(cabin);
+        
+        // Wheels
+        function createWheel() {
+            const wheelGroup = new THREE.Group();
+            const wheelGeometry = new THREE.CylinderGeometry(0.5, 0.5, 0.3, 32);
+            const wheelMaterial = new THREE.MeshPhongMaterial({ color: 0x333333 });
+            const wheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
+            wheel.rotation.x = Math.PI / 2;
+            wheel.castShadow = true;
+            wheelGroup.add(wheel);
+            
+            const tireGeometry = new THREE.TorusGeometry(0.4, 0.1, 16, 32);
+            const tireMaterial = new THREE.MeshPhongMaterial({ color: 0x050505 });
+            const tire = new THREE.Mesh(tireGeometry, tireMaterial);
+            tire.rotation.x = Math.PI / 2;
+            wheelGroup.add(tire);
+            
+            return wheelGroup;
+        }
+        
+        // Create four wheels
+        const wheelPositions = [
+            [1.2, -0.8, 2],   // Front right
+            [-1.2, -0.8, 2],  // Front left
+            [1.2, -0.8, -2],  // Rear right
+            [-1.2, -0.8, -2]  // Rear left
+        ];
+        
+        const wheels = [];
+        wheelPositions.forEach(pos => {
+            const wheel = createWheel();
+            wheel.position.set(pos[0], pos[1], pos[2]);
+            car.add(wheel);
+            wheels.push(wheel);
+        });
+        
+        // Spoiler
+        function createSpoiler(type) {
+            const spoiler = new THREE.Group();
+            
+            if (type === 'spoiler1') {
+                // Small spoiler
+                const spoilerGeo = new THREE.BoxGeometry(3, 0.1, 0.8);
+                const spoilerMat = new THREE.MeshPhongMaterial({ color: 0x333333 });
+                const spoilerMain = new THREE.Mesh(spoilerGeo, spoilerMat);
+                spoilerMain.position.y = 1.4;
+                spoilerMain.position.z = -3;
+                spoiler.add(spoilerMain);
+                
+                // Supports
+                for (let i = -1; i <= 1; i += 2) {
+                    const supportGeo = new THREE.BoxGeometry(0.1, 0.7, 0.1);
+                    const support = new THREE.Mesh(supportGeo, spoilerMat);
+                    support.position.x = i * 1.4;
+                    support.position.y = 1.05;
+                    support.position.z = -3;
+                    spoiler.add(support);
+                }
+            } else if (type === 'spoiler2') {
+                // Race spoiler
+                const spoilerGeo = new THREE.BoxGeometry(3.2, 0.15, 0.5);
+                const spoilerMat = new THREE.MeshPhongMaterial({ color: 0x222222 });
+                const spoilerMain = new THREE.Mesh(spoilerGeo, spoilerMat);
+                spoilerMain.position.y = 1.6;
+                spoilerMain.position.z = -3.2;
+                spoiler.add(spoilerMain);
+                
+                // Supports
+                for (let i = -1; i <= 1; i += 0.5) {
+                    const supportGeo = new THREE.BoxGeometry(0.1, 1, 0.1);
+                    const support = new THREE.Mesh(supportGeo, spoilerMat);
+                    support.position.x = i * 1.4;
+                    support.position.y = 1.1;
+                    support.position.z = -3.2;
+                    spoiler.add(support);
+                }
+                
+                // Wing
+                const wingGeo = new THREE.BoxGeometry(3, 0.7, 0.05);
+                wingGeo.rotateX(Math.PI / 8);
+                const wing = new THREE.Mesh(wingGeo, spoilerMat);
+                wing.position.y = 1.8;
+                wing.position.z = -2.8;
+                spoiler.add(wing);
+            } else if (type === 'spoiler3') {
+                // Extreme spoiler
+                const spoilerGeo = new THREE.BoxGeometry(2.8, 0.05, 1.8);
+                const spoilerMat = new THREE.MeshPhongMaterial({ color: 0x111111 });
+                const spoilerMain = new THREE.Mesh(spoilerGeo, spoilerMat);
+                spoilerMain.position.y = 2;
+                spoilerMain.position.z = -3.2;
+                spoiler.add(spoilerMain);
+                
+                // Supports
+                for (let i = -1; i <= 1; i += 1) {
+                    const supportGeo = new THREE.BoxGeometry(0.15, 2, 0.15);
+                    const support = new THREE.Mesh(supportGeo, spoilerMat);
+                    support.position.x = i * 1.2;
+                    support.position.y = 1;
+                    support.position.z = -3.2;
+                    spoiler.add(support);
+                }
+                
+                // Wing
+                const wingGeo = new THREE.BoxGeometry(3.2, 0.8, 0.05);
+                wingGeo.rotateX(Math.PI / 6);
+                const wing = new THREE.Mesh(wingGeo, spoilerMat);
+                wing.position.y = 2.5;
+                wing.position.z = -2.7;
+                spoiler.add(wing);
+                
+                // Second wing
+                const wing2Geo = new THREE.BoxGeometry(2.8, 0.6, 0.05);
+                wing2Geo.rotateX(Math.PI / 8);
+                const wing2 = new THREE.Mesh(wing2Geo, spoilerMat);
+                wing2.position.y = 2.7;
+                wing2.position.z = -2;
+                spoiler.add(wing2);
+            }
+            
+            return spoiler;
+        }
+        
+        // Add initial spoiler
+        let currentSpoiler = createSpoiler('spoiler2');
+        car.add(currentSpoiler);
+        
+        // Camera position
+        camera.position.z = 8;
+        camera.position.y = 3;
+        
+        // Controls - add touch support
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enablePan = false;
+        controls.touchAction = 'none';
+        controls.dampingFactor = 0.2;
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            // Rotate wheels
+            wheels.forEach(wheel => {
+                wheel.rotation.z += 0.01;
+            });
+            
+            // Required for damping
+            controls.update();
+            
+            renderer.render(scene, camera);
+        }
+        animate();
+        
+        // Event listeners for controls
+        document.getElementById('body-color').addEventListener('input', function(e) {
+            bodyMaterial.color.setHex(parseInt(e.target.value.substring(1), 16));
+        });
+        
+        document.querySelectorAll('.part-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll(`.part-btn[data-part^="${this.dataset.part.substring(0,6)}"]`).forEach(b => {
+                    b.classList.remove('active');
+                });
+                this.classList.add('active');
+                
+                if (this.dataset.part.startsWith('wheel')) {
+                    // Wheel style change would go here
+                } else if (this.dataset.part.startsWith('spoiler')) {
+                    car.remove(currentSpoiler);
+                    if (this.dataset.part !== 'none') {
+                        currentSpoiler = createSpoiler(this.dataset.part);
+                        car.add(currentSpoiler);
+                    }
+                }
+            });
+        });
+        
+        document.getElementById('engine-sound').addEventListener('change', function(e) {
+            // In a real app, would play different engine sounds
+            console.log(`Engine sound changed to ${e.target.value}`);
+        });
+        
+        // Chat functionality
+        const chatMessages = document.getElementById('chat-messages');
+        const userInput = document.getElementById('user-input');
+        const sendBtn = document.getElementById('send-btn');
+        
+        function addMessage(content, isUser = false) {
+            const msgDiv = document.createElement('div');
+            msgDiv.className = `chat-message ${isUser ? 'user-message' : 'jarvis-message'}`;
+            msgDiv.style.animation = 'fadeIn 0.5s';
+            msgDiv.innerHTML = content;
+            chatMessages.appendChild(msgDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+        
+        function sendMessage() {
+            const message = userInput.value.trim();
+            if (!message) return;
+            
+            addMessage(message, true);
+            userInput.value = '';
+            
+            // Show loading indicator
+            const loadingDiv = document.createElement('div');
+            loadingDiv.className = 'chat-message jarvis-message';
+            loadingDiv.innerHTML = `<span class="loading"></span> Processing...`;
+            chatMessages.appendChild(loadingDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+            
+            // Send to Flask backend
+            fetch('/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message })
+            })
+            .then(response => response.json())
+            .then(data => {
+                chatMessages.removeChild(loadingDiv);
+                addMessage(data.response);
+            })
+            .catch(error => {
+                chatMessages.removeChild(loadingDiv);
+                addMessage(`Error: ${error.message}`);
+            });
+        }
+        
+        sendBtn.addEventListener('click', sendMessage);
+        userInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') sendMessage();
+        });
+        
+        // Generate holographic effects
+        function createHolographicEffect() {
+            const effect = document.createElement('div');
+            effect.className = 'holographic';
+            effect.style.width = `${Math.random() * 100 + 100}px`;
+            effect.style.height = effect.style.width;
+            effect.style.left = `${Math.random() * 100}%`;
+            effect.style.top = `${Math.random() * 100}%`;
+            effect.style.animationDelay = `${Math.random() * 4}s`;
+            document.body.appendChild(effect);
+            
+            setTimeout(() => {
+                effect.remove();
+                createHolographicEffect();
+            }, 4000);
+        }
+        
+        // Create initial effects
+        for (let i = 0; i < 5; i++) {
+            setTimeout(createHolographicEffect, i * 1000);
+        }
+        
+        // PWA installation
+        let deferredPrompt;
+        const installBtn = document.getElementById('install-btn');
+        
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            installBtn.classList.remove('hidden');
+        });
+        
+        installBtn.addEventListener('click', () => {
+            installBtn.classList.add('hidden');
+            deferredPrompt.prompt();
+            deferredPrompt.userChoice.then(() => {
+                deferredPrompt = null;
+            });
+        });
+        
+        // Responsive design
+        window.addEventListener('resize', function() {
+            camera.aspect = window.innerWidth / (window.innerHeight * 0.7);
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight * 0.7);
+        });
+    </script>
+</body>
+</html>
+
